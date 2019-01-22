@@ -45,14 +45,7 @@ void *split(meta *cur, size_t size) {
     // printf("cannot split, cur size: %lu, cur->size: %lu\n", (unsigned
     // long)size,
     // (unsigned long)cur->size);
-    /*
-    if (cur->prev != NULL) {
-      cur->prev->next = cur->next;
-    }
-    if (cur->next != NULL) {
-      cur->next->prev = cur->prev;
-    }
-    */
+
     removeOne(cur);
     cur->prev = NULL;
     cur->next = NULL;
@@ -145,74 +138,10 @@ void *ff_malloc(size_t size) {
            temp, temp->address, temp->size);
     return res;
     */
-    if (cur->size < size + sizeof(meta)) { // cannot split
-      // printf("cannot split, cur size: %lu, cur->size: %lu\n",
-      //(unsigned long)size, (unsigned long)cur->size);
-      /*
-      if (cur->prev != NULL) {
-        cur->prev->next = cur->next;
-      }
-      if (cur->next != NULL) {
-        cur->next->prev = cur->prev;
-      }
-      */
-      removeOne(cur);
-      cur->prev = NULL;
-      cur->next = NULL;
-      allocated += cur->size;
-      return cur->address;
-    } else { // cur->size >= size + sizeof(meta)
-      /*
-      meta *newBlock = (meta *)(cur->address + size);
-      printf("ok, cur size: %lu, cur->size: %lu\n", (unsigned long)size,
-             (unsigned long)cur->size);
-
-      newBlock->prev = NULL;
-      newBlock->next = NULL;
-      newBlock->size = size;
-      newBlock->address =
-          cur->address + (cur->size - sizeof(meta) - size) + sizeof(meta);
-      cur->size = cur->size - sizeof(meta) - size;
-      printf("newBlock size: %lu, new Block address: %p, cur->size: %lu\n",
-             (unsigned long)newBlock->size, newBlock->address,
-             (unsigned long)cur->size);
-      return newBlock->address;
-      */
-      meta *newBlock = (meta *)(cur->address + size);
-      newBlock->next = cur->next;
-      newBlock->prev = cur->prev;
-      if (cur == head) {
-        head = newBlock;
-      } else {
-        cur->prev->next = newBlock;
-      }
-      if (cur->next != NULL) {
-        cur->next->prev = newBlock;
-      }
-      newBlock->address = (char *)(newBlock + 1);
-      newBlock->size = cur->size - size - sizeof(meta);
-      cur->size = size;
-      cur->next = NULL;
-      cur->prev = NULL;
-      return cur->address;
-      /*
-      newBlock->prev = cur->prev;
-      newBlock->next = cur->next;
-      if (cur->prev != NULL) {
-        cur->prev->next = newBlock;
-      }
-      if (cur->next != NULL) {
-        cur->next->prev = newBlock;
-      }
-      newBlock->size = cur->size - size - sizeof(meta);
-      newBlock->address = cur->address + size + sizeof(meta);
-      cur->prev = NULL;
-      cur->next = NULL;
-      cur->size = size;
-      allocated += cur->size;
-      return cur->address;
-      */
-    }
+    void *res = split(cur, size);
+    // printf("After malloc: \n");
+    // printFreeList();
+    return res;
   }
 }
 void add(meta *block) {
@@ -255,7 +184,7 @@ void add(meta *block) {
   // printf("After add: cur->address: %p, cur->size: %lu\n", block->address,
   //     (unsigned long)block->size);
 }
-void merge() {
+void merge1() {
   meta *cur = head;
   while (cur != NULL && cur->next != NULL) {
     // printf("tttttttttttttt\n");
@@ -266,13 +195,41 @@ void merge() {
       cur->next = cur->next->next;
       if (cur->next != NULL) {
         cur->next->prev = cur;
+        cur = cur->next;
+        if (cur != NULL && cur->address + cur->size == (char *)cur->next) {
+          cur->size += cur->next->size + sizeof(meta);
+          cur->next = cur->next->next;
+          if (cur->next != NULL) {
+            cur->next->prev = cur;
+          }
+        }
       }
+      break;
     } else {
       cur = cur->next;
     }
   }
-  // cur->next == null
-  cleanTail(cur);
+  // cleanTail(cur);
+}
+void merge(meta *cur) {
+  if (cur->prev != NULL) {
+    meta *prevBlock = cur->prev;
+    if (prevBlock->address + prevBlock->size == (char *)cur) {
+      prevBlock->size += cur->size + sizeof(meta);
+      prevBlock->next = cur->next;
+      if (cur->next != NULL) {
+        cur->next->prev = prevBlock;
+      }
+      cur = prevBlock;
+    }
+  }
+  if (cur->next != NULL && cur->address + cur->size == (char *)cur->next) {
+    cur->size += cur->next->size + sizeof(meta);
+    cur->next = cur->next->next;
+    if (cur->next != NULL) {
+      cur->next->prev = cur;
+    }
+  }
 }
 
 void cleanTail(meta *cur) {
@@ -308,7 +265,8 @@ void ff_free(void *ptr) {
   //     block->address, (unsigned long)block->size);
   allocated -= block->size;
   add(block);
-  merge();
+  merge(block);
+  // merge1();
   // printf("Free: \n");
   // printFreeList();
 }
